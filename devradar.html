@@ -1,0 +1,140 @@
+<html>
+  <head>
+    <title>DevRadarJs</title>
+    <style type="text/css">
+      body { 
+        margin: 0;
+        text-align: center;
+      }
+      .event {
+          width: 600px;
+          margin-top: 20px;
+          margin-left: auto ; 
+          margin-right: auto ;
+          background-color: #66CC33;
+          border-radius: 10px;
+          text-align: left;
+          padding: 15px;
+          -moz-box-shadow: 1px 1px 12px #555;
+          -webkit-box-shadow: 1px 1px 12px #555;
+          box-shadow: 1px 1px 12px #555;
+          overflow:hidden; 
+      }
+      .commit-picture {
+        float:left;
+        width:80px;
+        text-align: center;
+        font-size: 1.2em;
+      }
+      .commit-text {
+        font-size: 1.4em;
+        margin-left: 100px;        
+        text-align: right;
+      }
+      .commit-date {
+        font-style:italic;
+        font-size: 0.9em;
+        margin-bottom: 20px;
+        margin-left: 100px;
+        text-align: left;
+      }
+      .author {
+        margin-bottom: 5px;
+        box-shadow: 1px 1px 12px #555;
+        -moz-box-shadow: 1px 1px 12px #555;
+        -webkit-box-shadow: 1px 1px 12px #555;
+        box-shadow: 1px 1px 12px #555;
+      }
+      #workspace {
+        font-size: 1.5em;
+        text-align: left;
+        padding-left: 25px;
+      }
+    </style>
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script> 
+    <script type="text/javascript"> 
+      $(document).ready(function(){
+        // setup some basic data
+        user = "xebia-france";
+        repository = "dev-radar";
+        branch = "master";
+        
+        callback = '?callback=?';
+        repositoryUrl = 'http://github.com/api/v2/json/repos/show/'+ user + '/' + repository + callback;
+        commitUrl = 'http://github.com/api/v2/json/commits/list/'+ user + '/' + repository + '/' + branch + callback;
+        userUrl = 'http://github.com/api/v2/json/user/show/';
+        hudsonUrl = 'http://fluxx.fr.cr:9080/hudson/job/dev-radar/api/json?jsonp=?';
+        var gravatarMap= {};
+        var loginMap = {};
+        
+        // local page functions which update the content
+        function updateRepository(json) {
+          $('#workspace').html(json.repository.description);
+        }
+
+
+        //Check if a gravatar Image has been already loaded for this login.
+        function checkGravatar(login) {
+          if (!gravatarMap[login]) {
+            $.getJSON(userUrl + login + callback, function(json) {
+              gravatarMap[login] = "http://www.gravatar.com/avatar/" + json.user.gravatar_id;
+              $("." + login).attr("src", gravatarMap[login]); //.getJSON is asynchronous, code will probably continue before this function is called.
+            });          
+          }
+        }
+        
+        
+        function updateCommits(json) {
+          $.each(json.commits, function(i,commit){
+                checkGravatar(commit.author.login);
+                loginMap[commit.author.login] = commit.author.name;
+                message = commit.message.replace(/(<([^>]+)>)/ig,"");
+                // escape this instead : < &lt; > &gt; " &quote; & &amp;
+                $('#events').append('<div class="event"><div class="commit-picture"><img class="' + commit.author.login + ' author" src="' + gravatarMap[commit.author.login] +'"/>' + '<br/>' + commit.author.name + '</div><div class="commit-date">' + commit.committed_date + '</div><div class="commit-text">' + message  + '</div>')
+                if ( i == 9 ) {
+                  return false;
+                }
+              });
+        }
+        
+        function retrieveAllBuilds(json) {
+          $.each(json.builds, function(i,build) {
+                $.getJSON(build.url + 'api/json?jsonp=?',retrieveHudsonBuild)
+                if ( i == 3 ) {
+                  return false;
+                }
+              });
+        }
+        
+        function retrieveHudsonBuild(json) {
+          timestamp = json.timestamp;
+          result = json.result;
+          author = json.changeSet.items[0].author.fullName;
+          login = loginMap[author];
+          checkGravatar(login)
+          $('#events').append('<div class="event"><div class="commit-picture"><img class="' + login + ' author" src="' + gravatarMap[login] +'"/>' + '<br/>' + author + '</div><div class="commit-date">' + timestamp + '</div><div class="commit-text">Build ' + result  + '</div>')
+        }
+
+        function pollGitHub() {
+          $.getJSON(repositoryUrl, updateRepository);          
+          $.getJSON(commitUrl, updateCommits);
+        }
+        
+        function pollHudson() {
+          $.getJSON(hudsonUrl,retrieveAllBuilds);  
+        }
+        
+        // Here we go !
+        pollGitHub();
+        //pollHudson();
+      });
+      </script>
+    </script>
+  </head>
+  <body>
+    <h1>Dev Radar</h1>
+    <div id="workspace"></div>
+    <div id="events"></div>
+  </body>
+</html>
+
